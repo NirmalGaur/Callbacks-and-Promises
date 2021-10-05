@@ -195,6 +195,7 @@ getCountryData3('germany'); */
 
 const renderError = function (message) {
   countriesContainer.insertAdjacentText('beforeend', message);
+  countriesContainer.style.opacity = 1;
 };
 
 const getCountryAndNeighbour2 = function (country) {
@@ -522,10 +523,112 @@ let currenImage;
 // Here we will recreate the whereAmI function.
 // We start by creating a special kind of function which is async function. This is an asynchronous function, that will basically keep running in the background while performing the code that inside of it.
 // Inside async function, we can have one or more await statements where we need a promise.
-// And so in async function, we can use the await keyword to basically await for the result of the promise. So basically await will stop decode execution at this
+// And so in async function, we can use the await keyword to basically await for the result of the promise. So await will stop the code execution at this point of the function until the premise is fulfilled.
+// Note that stopping the code here is NOT blocking the execution, because this function is running asynchronously in the background. And therefore it is not blocking the main threat of execution. So it's not blocking the call stack.
+// It makes our code look like regular synchronous code while behind the scenes everything is in fact asynchronous.
+// As soon as this premise here is resolved, then the value of this whole await expression that we have here is going to be the resolved value of the premise. And so we can simply store that into a variable.
+// Now calling Jason itself returns a new premise. So again we have to use await this and then store the results directly into the data variable.
 
-// point of the function until the premise is fulfilled.
+// Error Handling: with async/await, we can't use the catch method that we use before, because we cannot really attach it anywhere. So instead, we use something called "try catch" statement.
+// We basically wrap all our code in a try block and apply the catch method as usual.
 
-const whereAmIasync = async function (country) {
-  await fetch(`https://restcountries.com/v3/name/${country}`);
+const whereAmIasync = async function () {
+  try {
+    //Geolocation:
+    const position = await getPosition();
+    const { latitude: lati, longitude: longi } = position.coords;
+
+    //Reverse Geocoding:
+    const resGeo = await fetch(
+      `https://geocode.xyz/${lati},${longi}?geoit=json`
+    );
+    //console.log(resGeo);
+    if (!resGeo.ok) throw new Error('Problem getting Location Data');
+    const dataGeo = await resGeo.json();
+
+    const res = await fetch(
+      `https://restcountries.com/v3/name/${dataGeo.country}`
+    );
+    //console.log(res);
+    if (!res.ok) throw new Error('Problem getting Country Data');
+    /* this is same as writing:
+    fetch(`https://restcountries.com/v3/name/${country}`).then(res =>
+    console.log(res)
+    );   */
+    const data = await res.json();
+    renderCountry(data[0]);
+    return `You are in ${dataGeo.city}, ${dataGeo.country}`;
+  } catch (err) {
+    renderError(`Something went wrong! ${err.message}`);
+    //rethrowing the error as a returned value ( to reject promise returned from the async function):
+    throw err;
+  }
 };
+// SHOW: whereAmIasync();
+
+// Async await is all about consuming promises. It is just synthetic sugar over consuming premises.
+
+// Returning values from Async: here we get a promise and not the value. The reason for that is that at this point of the code, JavaScript has simply no way of knowing yet the a string here that we returned because the async function is still running, but it is also not blocking the code outside the function. JavaScript has no way of knowing what will be returned from this function.
+// So the promise that we see down here, the fulfilled value of that promise is going to be this string here that is the value that we return from the async function (at least if there is no error here happening).
+// even though there was an error in the async function, the promise that the async function returns is still fulfilled and not rejected
+// If we want to catch th error outside the  function, we need to rethrow the error inside the function. Then we will manually reject the promise that's returned from the async function.
+
+//const city = whereAmIasync();
+//console.log(city); // Here we get a promise, not the returned value
+/* SHOW: whereAmIasync()
+  .then(city => console.log(city))
+  .catch(err => console.error(`${err.message}`))
+  .finally(() => console.log('Prints below the async')); */ // Here if we want to print some sync code after the async, we can put it inside finally.
+
+// Instead of using then method with async await, we can also only the async await to do the above task. There, the async function would be IIFE:
+/* SHOW: (async function () {
+  try {
+    const city = await whereAmIasync();
+    console.log(`${city}`);
+  } catch (err) {
+    console.error(`${err.message}`);
+  }
+  console.log('Prints below the async');
+})(); */
+
+// RUNNING PROMISES IN PARALLEL:
+// Suppose we wanted to get some data about three countries at the same time, but the order in which that data arrives does not matter at all. Lets now implement this using async function:
+
+const getJSON = function (url, errorMsg = 'Something went wrong') {
+  return fetch(url).then(response => {
+    if (!response.ok) throw new Error(`${errorMsg} (${response.status})`);
+
+    return response.json();
+  });
+};
+
+const get3Countries = async function (c1, c2, c3) {
+  try {
+    const [data1] = await getJSON(`https://restcountries.com/v3/name/${c1}`);
+    const [data2] = await getJSON(`https://restcountries.com/v3/name/${c2}`);
+    const [data3] = await getJSON(`https://restcountries.com/v3/name/${c3}`);
+    console.log(data1.capital[0], data2.capital[0], data3.capital[0]);
+  } catch (err) {
+    console.error(err);
+  }
+};
+//Here we basically was to run all these Ajax calls one after another, even though the result of the one here does not depend on the another (we can see in the network tab that one have to wait for the another to finish).
+// So whenever we do multiple asynchronous operations at the same time, and operations that don't depend on one another, then we always run them in parallel, using combinator functions (allows us to combine multiple promises). In this case, we would use promise.all combinator function.
+// Promise.all takes an array of promises and it will return a new promise which will run all the promises in the array at the same time.
+
+const get3CountriesParallel = async function (c1, c2, c3) {
+  try {
+    const data = await Promise.all([
+      getJSON(`https://restcountries.com/v3/name/${c1}`),
+      getJSON(`https://restcountries.com/v3/name/${c2}`),
+      getJSON(`https://restcountries.com/v3/name/${c3}`),
+    ]);
+    console.log(data.map(d => d[0].capital[0]));
+  } catch (err) {
+    console.error(err);
+  }
+};
+// A very important thing to mention here is that if one of the promises rejects, all actually rejects as well. So we say that promise.all short circuits when one promise rejects because one rejected promise is enough for the entire thing to reject as well.
+
+get3Countries('india', 'usa', 'portugal');
+get3CountriesParallel('italy', 'france', 'germany');
