@@ -630,5 +630,117 @@ const get3CountriesParallel = async function (c1, c2, c3) {
 };
 // A very important thing to mention here is that if one of the promises rejects, all actually rejects as well. So we say that promise.all short circuits when one promise rejects because one rejected promise is enough for the entire thing to reject as well.
 
-get3Countries('india', 'usa', 'portugal');
-get3CountriesParallel('italy', 'france', 'germany');
+// SHOW: get3Countries('india', 'usa', 'portugal');
+// SHOW: get3CountriesParallel('italy', 'france', 'germany');
+
+// OTHER PROMISE COMBINATORS:
+// Promise.race: just like other combinator, receives an array of promises and it also returns a promise. Now this promise returned by Promise.race is settled as soon as one of the input promises settles. And settled simply means that a value is available, but it doesn't matter if the promise got rejected or fulfilled. So in Promis.race, the fulfillment value of the whole race promise is gonna be the fulfillment value of the winning promise.
+// Even a promise that gets rejected can also win the race. And so we say that Promise.race short circuits whenever one of the promises gets settled, so again, that means no matter if fulfilled or rejected.
+
+const countryRace = async function (c1, c2, c3) {
+  try {
+    const res = await Promise.race([
+      getJSON(`https://restcountries.com/v3/name/${c1}`),
+      getJSON(`https://restcountries.com/v3/name/${c2}`),
+      getJSON(`https://restcountries.com/v3/name/${c3}`),
+    ]);
+    console.log(res[0]);
+  } catch (err) {
+    console.log(err);
+  }
+};
+// SHOW: countryRace('egypt', 'mexico', 'russia');
+
+// In the real world, Promise.race is actually very useful to prevent against never ending promises or also very long running promises.
+// For example, if your user has a very bad internet connection, then a fetch requests in your application might take way too long to actually be useful. And so we can create a special time out promise, which automatically rejects after a certain time has passed:
+
+const timeout = function (seconds) {
+  return new Promise(function (_, reject) {
+    setTimeout(function () {
+      reject(new Error('Request took too long!'));
+    }, seconds * 1000);
+  });
+};
+/* SHOW: Promise.race([
+  getJSON(`https://restcountries.com/v3/name/tanzania`),
+  timeout(0.78),
+])
+  .then(data => console.log(data[0]))
+  .catch(err => console.error(err));   */
+
+// Promise.allSettled: it takes in an array of promises again, and it will simply return an array of all the settled promises, no matter if the promises got rejected or not. So it's similar to Promise.all in regard that it also returns an array of all the results, but the difference is that Promise.all will short circuit as soon as one promise rejects, but Promise.allSettled, simply never short circuits.
+
+/* SHOW: Promise.allSettled([
+  Promise.resolve('Success'),
+  Promise.reject('ERROR'),
+  Promise.resolve('Another success'),
+]).then(res => console.log(res));
+
+Promise.all([
+  Promise.resolve('Success'),
+  Promise.reject('ERROR'),
+  Promise.resolve('Another success'),
+])
+  .then(res => console.log(res))
+  .catch(err => console.error(err)); */
+
+// Promise.any [ES2021]: Promise.any takes in an array of multiple promises and this one will then return the first fulfilled promise and it will simply ignore rejected promises. So basically Promise.any is very similar to Promise.race with the difference that rejected promises are ignored. And so therefore the results of Promise.any is always gonna be a fulfilled promise, unless of course all of them reject.
+
+/* SHOW: Promise.any([
+  Promise.resolve('Success'),
+  Promise.reject('ERROR'),
+  Promise.resolve('Another success'),
+])
+  .then(res => console.log(res))
+  .catch(err => console.error(err)); */
+
+/* Coding Challenge #3
+Your tasks:
+PART 1
+1. Write an async function 'loadNPause' that recreates Challenge #2, this time using async/await (only the part where the promise is consumed, reuse the 'createImage' function from before)
+2. Compare the two versions, think about the big differences, and see which one you like more
+3. Don't forget to test the error handler, and to set the network speed to “Fast 3G” in the dev tools Network tab
+PART 2
+1. Create an async function 'loadAll' that receives an array of image paths 'imgArr'
+2. Use .map to loop over the array, to load all the images with the 'createImage' function (call the resulting array 'imgs')
+3. Check out the 'imgs' array in the console! Is it like you expected?
+4. Use a promise combinator function to actually get the images from the array 
+5. Add the 'parallel' class to all the images (it has some CSS styles)
+Test data Part 2: ['img/img-1.jpg', 'img/img-2.jpg', 'img/img-3.jpg']. To test, turn off the 'loadNPause' function  */
+
+// PART 1:
+const loadNPause = async function () {
+  try {
+    //Load Image 1:
+    let img = await createImage('img/img-1.jpg');
+    console.log('Image 1 loaded');
+    await wait(2);
+    img.style.display = 'none';
+
+    //Load Image 2:
+    img = await createImage('img/img-2.jpg');
+    console.log('Image 2 loaded');
+    await wait(2);
+    img.style.display = 'none';
+  } catch (err) {
+    console.log(err);
+  }
+};
+// SHOW: loadNPause();
+
+// PART 2:
+const loadAll = async function (imgArr) {
+  try {
+    const imgs = imgArr.map(async img => await createImage(img));
+    console.log(imgs); // Shows array of promises bcz async funtions returns promises
+
+    const imgsEl = await Promise.all(imgs);
+    console.log(imgsEl); // Now shows array of images
+    imgsEl.forEach(img => img.classList.add('parallel'));
+  } catch (err) {
+    console.log(err);
+  }
+};
+// It is pretty common to use async await in a map method, then we end up with an array of promises ,that then we can handle in the next step with Promise.all combinator function.
+
+// SHOW: loadAll(['img/img-1.jpg', 'img/img-2.jpg', 'img/img-3.jpg']);
